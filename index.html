@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mistura de Cores</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6a5acd">
+
+<style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(160deg, #6a5acd, #40e0d0);
+  font-family: Arial, sans-serif;
+  color: #fff;
+}
+
+.container {
+  max-width: 420px;
+  margin: auto;
+  padding: 20px;
+  text-align: center;
+}
+
+/* MENU */
+.menu, .vitoria {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 80px;
+}
+
+.menu button, .vitoria button {
+  padding: 18px;
+  font-size: 18px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+}
+
+.menu button.hardcore {
+  background: #b00020;
+}
+
+/* JOGO */
+.topo {
+  background: rgba(0,0,0,0.25);
+  border-radius: 16px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+.misturas {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mistura {
+  background: rgba(0,0,0,0.28);
+  border-radius: 18px;
+  padding: 12px;
+  opacity: 0.45;
+  transition: all 0.3s ease;
+}
+
+.mistura.ativa,
+.mistura.acertada {
+  opacity: 1;
+}
+
+.cores {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.cor {
+  flex: 1;
+  height: 85px;
+  border-radius: 14px;
+}
+
+.opcoes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.opcao {
+  height: 55px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+}
+
+.opcao.acerto {
+  animation: acerto 0.6s ease;
+}
+
+@keyframes acerto {
+  50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(0,255,150,1); }
+}
+
+/* VITÓRIA */
+.vitoria h1 {
+  font-size: 32px;
+}
+
+.vitoria .score {
+  font-size: 22px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- MENU -->
+  <div id="menu" class="menu">
+    <h2>🎨 Mistura de Cores</h2>
+    <button onclick="selecionarModo('facil')">🟢 Fácil</button>
+    <button onclick="selecionarModo('normal')">🟡 Normal</button>
+    <button class="hardcore" onclick="selecionarModo('hardcore')">🔴 Hardcore</button>
+  </div>
+
+  <!-- JOGO -->
+  <div id="jogo" style="display:none;">
+    <div class="topo">
+      <div>🎯 Fase <span id="fase">1</span>/120</div>
+      <div>⭐ Pontos: <span id="pontos">0</span></div>
+      <div>Modo: <span id="modo"></span></div>
+    </div>
+
+    <div class="misturas" id="misturas"></div>
+  </div>
+
+  <!-- VITÓRIA -->
+  <div id="vitoria" class="vitoria" style="display:none;">
+    <h1>🏆 Parabéns!</h1>
+    <p>Você concluiu todas as fases!</p>
+    <div class="score">⭐ Pontuação final: <span id="pontosFinal"></span></div>
+    <div class="score">Modo: <span id="modoFinal"></span></div>
+
+    <button onclick="recomecar()">🔄 Jogar novamente</button>
+    <button onclick="voltarMenu()">🏠 Voltar ao menu</button>
+  </div>
+
+</div>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+
+/* MODOS */
+const MODOS = {
+  facil: { claro: 1.25, escuro: 0.75, penalidade: 5 },
+  normal: { claro: 1.15, escuro: 0.85, penalidade: 10 },
+  hardcore: { claro: 1.05, escuro: 0.95, penalidade: 30 }
+};
+
+let modoAtual, configModo;
+let combinacoes = [];
+let misturasDaFase = [];
+let indiceMistura = 0;
+let faseAtual = 1;
+let pontos = 0;
+
+/* SAVE */
+function salvar() {
+  localStorage.setItem("saveCores", JSON.stringify({
+    modoAtual, faseAtual, indiceMistura, pontos
+  }));
+}
+
+function carregar() {
+  const s = localStorage.getItem("saveCores");
+  if (!s) return false;
+
+  const d = JSON.parse(s);
+  modoAtual = d.modoAtual;
+  configModo = MODOS[modoAtual];
+  faseAtual = d.faseAtual;
+  indiceMistura = d.indiceMistura;
+  pontos = d.pontos;
+
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("jogo").style.display = "block";
+  document.getElementById("modo").textContent = modoAtual.toUpperCase();
+  document.getElementById("fase").textContent = faseAtual;
+  document.getElementById("pontos").textContent = pontos;
+
+  gerarCombinacoes();
+  iniciarFase();
+  return true;
+}
+
+/* MENU */
+function selecionarModo(modo) {
+  modoAtual = modo;
+  configModo = MODOS[modo];
+  faseAtual = 1;
+  pontos = 0;
+
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("jogo").style.display = "block";
+  document.getElementById("modo").textContent = modo.toUpperCase();
+
+  gerarCombinacoes();
+  iniciarFase();
+  salvar();
+}
+
+/* CORES */
+function misturarRGB(c1, c2) {
+  const a = c1.match(/\w\w/g).map(x => parseInt(x, 16));
+  const b = c2.match(/\w\w/g).map(x => parseInt(x, 16));
+  return `rgb(${(a[0]+b[0])>>1},${(a[1]+b[1])>>1},${(a[2]+b[2])>>1})`;
+}
+
+function ajustarBrilho(rgb, f) {
+  const v = rgb.match(/\d+/g).map(Number);
+  return `rgb(${Math.min(255,v[0]*f)},${Math.min(255,v[1]*f)},${Math.min(255,v[2]*f)})`;
+}
+
+function criarMistura(c1, c2) {
+  const correta = misturarRGB(c1, c2);
+  return {
+    cor1: c1,
+    cor2: c2,
+    correta,
+    opcoes: [
+      correta,
+      ajustarBrilho(correta, configModo.claro),
+      ajustarBrilho(correta, configModo.escuro)
+    ].sort(() => Math.random() - 0.5)
+  };
+}
+
+function gerarCombinacoes() {
+  combinacoes = [];
+  for (let i = 0; i < coresBase.length; i++) {
+    for (let j = i + 1; j < coresBase.length; j++) {
+      combinacoes.push(criarMistura(coresBase[i], coresBase[j]));
+    }
+  }
+  combinacoes.sort(() => Math.random() - 0.5);
+}
+
+function iniciarFase() {
+  if (faseAtual > 120) {
+    mostrarVitoria();
+    return;
+  }
+  misturasDaFase = combinacoes.splice(0, 3);
+  indiceMistura = 0;
+  renderMisturas();
+}
+
+function renderMisturas() {
+  const area = document.getElementById("misturas");
+  area.innerHTML = "";
+
+  misturasDaFase.forEach((m, i) => {
+    const bloco = document.createElement("div");
+    bloco.className = "mistura" + (i === indiceMistura ? " ativa" : "") + (i < indiceMistura ? " acertada" : "");
+
+    bloco.innerHTML = `
+      <div class="cores">
+        <div class="cor" style="background:${m.cor1}"></div>
+        <div class="cor" style="background:${m.cor2}"></div>
+      </div>
+      ${i === indiceMistura ? `
+        <div class="opcoes">
+          ${m.opcoes.map(c => `<button class="opcao" style="background:${c}"></button>`).join("")}
+        </div>` : ""}
+    `;
+
+    if (i === indiceMistura) {
+      bloco.querySelectorAll(".opcao").forEach((btn, idx) => {
+        btn.onclick = () => responder(m.opcoes[idx], btn);
+      });
+    }
+
+    area.appendChild(bloco);
+  });
+}
+
+function responder(cor, btn) {
+  const atual = misturasDaFase[indiceMistura];
+  if (cor === atual.correta) {
+    btn.classList.add("acerto");
+    pontos += 10;
+
+    setTimeout(() => {
+      indiceMistura++;
+      if (indiceMistura === 3) {
+        pontos += 20;
+        faseAtual++;
+        document.getElementById("fase").textContent = faseAtual;
+        iniciarFase();
+      } else {
+        renderMisturas();
+      }
+      salvar();
+    }, 400);
+  } else {
+    pontos = Math.max(0, pontos - configModo.penalidade);
+    misturasDaFase[indiceMistura] = combinacoes.shift();
+    renderMisturas();
+    salvar();
+  }
+  document.getElementById("pontos").textContent = pontos;
+}
+
+/* VITÓRIA */
+function mostrarVitoria() {
+  localStorage.removeItem("saveCores");
+  document.getElementById("jogo").style.display = "none";
+  document.getElementById("vitoria").style.display = "flex";
+  document.getElementById("pontosFinal").textContent = pontos;
+  document.getElementById("modoFinal").textContent = modoAtual.toUpperCase();
+}
+
+function recomecar() {
+  localStorage.removeItem("saveCores");
+  location.reload();
+}
+
+function voltarMenu() {
+  localStorage.removeItem("saveCores");
+  document.getElementById("vitoria").style.display = "none";
+  document.getElementById("menu").style.display = "flex";
+}
+
+/* START */
+const coresBase = [
+ "#ff0000","#0000ff","#ffff00","#00ff00","#ff00ff","#00ffff",
+ "#800000","#008080","#808000","#800080","#ffa500","#ffc0cb",
+ "#a52a2a","#4b0082","#2e8b57","#4682b4","#dc143c","#ffd700",
+ "#556b2f","#8b4513","#708090","#40e0d0","#ff6347","#6a5acd",
+ "#7fff00","#d2691e","#5f9ea0","#9acd32"
+];
+
+if (!carregar()) {
+  // menu aparece por padrão
+}
+</script>
+
+</body>
+</html>
