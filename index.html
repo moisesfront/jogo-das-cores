@@ -268,8 +268,14 @@ function renderMisturas() {
   area.innerHTML = "";
 
   misturasDaFase.forEach((m, i) => {
+    // ❌ não renderiza misturas futuras
+    if (i > indiceMistura) return;
+
     const bloco = document.createElement("div");
-    bloco.className = "mistura" + (i === indiceMistura ? " ativa" : "") + (i < indiceMistura ? " acertada" : "");
+    bloco.className =
+      "mistura" +
+      (i === indiceMistura ? " ativa" : "") +
+      (i < indiceMistura ? " acertada" : "");
 
     bloco.innerHTML = `
       <div class="cores">
@@ -278,7 +284,9 @@ function renderMisturas() {
       </div>
       ${i === indiceMistura ? `
         <div class="opcoes">
-          ${m.opcoes.map(c => `<button class="opcao" style="background:${c}"></button>`).join("")}
+          ${m.opcoes.map(c => `
+            <button class="opcao" style="background:${c}"></button>
+          `).join("")}
         </div>` : ""}
     `;
 
@@ -291,6 +299,7 @@ function renderMisturas() {
     area.appendChild(bloco);
   });
 }
+
 
 function responder(cor, btn) {
   const atual = misturasDaFase[indiceMistura];
